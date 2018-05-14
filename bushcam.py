@@ -8,25 +8,43 @@ import RPi.GPIO as GPIO
 import serial
 from fractions import Fraction
 
+WIRELESS_SCAN_PERIOD = 60
+
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(25,GPIO.OUT,initial=0)
 GPIO.setup(24,GPIO.IN)
 
 def PrepFileSaveRetName():
   ftime = time.gmtime()
-  save_dir = str(ftime.tm_year) + "-" + str(ftime.tm_mon).zfill(2) + "-" + str(ftime.tm_mday).zfill(2)
+  save_dir = str(ftime.tm_year) + "-" + \
+             str(ftime.tm_mon).zfill(2) + "-" + \
+             str(ftime.tm_mday).zfill(2)
   if not os.path.isdir("./" + save_dir):
     os.mkdir("./" + save_dir)
   file_inc = 0
-  save_file = str(ftime.tm_year) + str(ftime.tm_mon).zfill(2) + str(ftime.tm_mday).zfill(2) + "_" + str(ftime.tm_hour).zfill(2) + str(ftime.tm_min).zfill(2) + str(ftime.tm_sec).zfill(2) + "_" + str(file_inc).zfill(2) + ".jpg"
+  save_file = str(ftime.tm_year) + \
+              str(ftime.tm_mon).zfill(2) + \
+              str(ftime.tm_mday).zfill(2) + "_" + \
+              str(ftime.tm_hour).zfill(2) + \
+              str(ftime.tm_min).zfill(2) + \
+              str(ftime.tm_sec).zfill(2) + "_" + \
+              str(file_inc).zfill(2) + ".jpg"
   while os.path.isfile("./" + save_dir + "/" + save_file):
     file_inc = file_inc + 1
-    save_file = str(ftime.tm_year) + str(ftime.tm_mon).zfill(2) + str(ftime.tm_mday).zfill(2) + "_" + str(ftime.tm_hour).zfill(2) + str(ftime.tm_min).zfill(2) + str(ftime.tm_sec).zfill(2) + "_" + str(file_inc).zfill(2) + ".jpg"
+    save_file = str(ftime.tm_year) + \
+                str(ftime.tm_mon).zfill(2) + \
+                str(ftime.tm_mday).zfill(2) + "_" + \
+                str(ftime.tm_hour).zfill(2) + \
+                str(ftime.tm_min).zfill(2) + \
+                str(ftime.tm_sec).zfill(2) + "_" + \
+                str(file_inc).zfill(2) + ".jpg"
   return "./" + save_dir + "/" + save_file 
 
 ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0)
 
 wifiDataCache = str('')
+
+wifiDataDumpLast = int(time.time())
 
 with picamera.PiCamera(framerate=4) as camera:
   while True:
@@ -43,9 +61,13 @@ with picamera.PiCamera(framerate=4) as camera:
         camera.capture(newfile) 
         print camera.exposure_speed
         GPIO.output(25,0)
-        if len(wifiDataCache) > 0:
+        if (len(wifiDataCache) > 0) and wifiDataCache.endswith("\n"):
+          wfile = open(newfile.replace("jpg","txt"), "w")
+          wfile.write(wifiDataCache)
+          wfile.close()
           print wifiDataCache
           wifiDataCache = str()
+          wifiDataDumpLast = int(time.time())
         time.sleep(0.5)
 
       time.sleep(0.1)
@@ -54,6 +76,16 @@ with picamera.PiCamera(framerate=4) as camera:
           for i in ser.readline():
             wifiDataCache += i
           
+      if (len(wifiDataCache) > 0) and wifiDataCache.endswith("\n"):
+        if ((wifiDataDumpLast + WIRELESS_SCAN_PERIOD) < int(time.time())):
+          dfile = PrepFileSaveRetName().replace("jpg", "txt")
+          wfile = open(dfile, "w")
+          wfile.write(wifiDataCache)
+          wfile.close()
+          print wifiDataCache
+          wifiDataCache = str()
+          wifiDataDumpLast = int(time.time())
+
     except KeyboardInterrupt:
       print "Exiting"
       GPIO.cleanup()
